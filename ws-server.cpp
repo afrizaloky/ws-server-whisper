@@ -45,9 +45,9 @@ struct ws_client_slot {
 static int g_argc;
 static char **g_argv;
 static std::shared_mutex g_ws_clients_mutex;
-static std::unordered_map<void *, ws_client_slot *> g_ws_clients;
+static std::unordered_map<void *, std::shared_ptr<ws_client_slot>> g_ws_clients;
 
-static ws_client_slot *find_ws_client(websocketpp::connection_hdl hdl)
+static std::shared_ptr<ws_client_slot> find_ws_client(websocketpp::connection_hdl hdl)
 {
 	std::shared_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 
@@ -58,17 +58,16 @@ static ws_client_slot *find_ws_client(websocketpp::connection_hdl hdl)
 	return nullptr;
 }
 
-static ws_client_slot *add_ws_client(websocketpp::connection_hdl hdl)
+static std::shared_ptr<ws_client_slot> add_ws_client(websocketpp::connection_hdl hdl)
 {
 	std::unique_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 	void *key = hdl.lock().get();
-	ws_client_slot *cl;
 
 	auto it = g_ws_clients.find(key);
 	if (it != g_ws_clients.end())
 		return it->second;
-
-	cl = new ws_client_slot;
+	
+	auto cl = std::make_shared<ws_client_slot>();
 	g_ws_clients[key] = cl;
 	return cl;
 }
@@ -77,19 +76,16 @@ static void del_ws_client(websocketpp::connection_hdl hdl)
 {
 	std::unique_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 	void *key = hdl.lock().get();
-	ws_client_slot *cl;
 
 	auto it = g_ws_clients.find(key);
 	if (it != g_ws_clients.end()) {
-		cl = it->second;
 		g_ws_clients.erase(it);
-		delete cl;
 	}
 }
 
 static void on_accept(struct ws_server *s, websocketpp::connection_hdl hdl)
 {
-	ws_client_slot *cl = add_ws_client(hdl);
+	auto cl = add_ws_client(hdl);
 
 #if DEBUG_WRITE_TO_WAV
 	std::string ep = s->ctx.get_con_from_hdl(hdl)->get_remote_endpoint();
@@ -114,7 +110,7 @@ static void on_accept(struct ws_server *s, websocketpp::connection_hdl hdl)
 static void on_message(struct ws_server *s, websocketpp::connection_hdl hdl, msg_ptr msg)
 {
 	std::string ep = s->ctx.get_con_from_hdl(hdl)->get_remote_endpoint();
-	ws_client_slot *cl = find_ws_client(hdl);
+	auto cl = find_ws_client(hdl);
 	std::vector<float> pcmf32;
 
 	if (!cl)
@@ -154,7 +150,7 @@ static void on_message(struct ws_server *s, websocketpp::connection_hdl hdl, msg
 
 static void on_close(struct ws_server *s, websocketpp::connection_hdl hdl)
 {
-	ws_client_slot *cl = find_ws_client(hdl);
+	auto cl = find_ws_client(hdl);
 
 	cl->wc.stop();
 	cl->routine.join();
