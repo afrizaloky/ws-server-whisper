@@ -1,3 +1,6 @@
 /ws-server
 /*.wav
 *.o
+
+build
+.cache
