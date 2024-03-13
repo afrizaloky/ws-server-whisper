@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <mutex>
 #include <cmath>
+#include <shared_mutex>
 
 #include "wav_writer.h"
 #include "whisper_channel.hpp"
@@ -43,12 +44,12 @@ struct ws_client_slot {
 
 static int g_argc;
 static char **g_argv;
-static std::mutex g_ws_clients_mutex;
+static std::shared_mutex g_ws_clients_mutex;
 static std::unordered_map<void *, ws_client_slot *> g_ws_clients;
 
 static ws_client_slot *find_ws_client(websocketpp::connection_hdl hdl)
 {
-	std::lock_guard<std::mutex> lock(g_ws_clients_mutex);
+	std::shared_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 
 	auto it = g_ws_clients.find(hdl.lock().get());
 	if (it != g_ws_clients.end())
@@ -59,7 +60,7 @@ static ws_client_slot *find_ws_client(websocketpp::connection_hdl hdl)
 
 static ws_client_slot *add_ws_client(websocketpp::connection_hdl hdl)
 {
-	std::lock_guard<std::mutex> lock(g_ws_clients_mutex);
+	std::unique_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 	void *key = hdl.lock().get();
 	ws_client_slot *cl;
 
@@ -74,7 +75,7 @@ static ws_client_slot *add_ws_client(websocketpp::connection_hdl hdl)
 
 static void del_ws_client(websocketpp::connection_hdl hdl)
 {
-	std::lock_guard<std::mutex> lock(g_ws_clients_mutex);
+	std::unique_lock<std::shared_mutex> lock(g_ws_clients_mutex);
 	void *key = hdl.lock().get();
 	ws_client_slot *cl;
 

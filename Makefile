@@ -2,7 +2,7 @@
 CXX = g++
 CXXFLAGS = \
 	-O3 \
-	-std=c++11 \
+	-std=c++17 \
 	-D_XOPEN_SOURCE=600 \
 	-D_GNU_SOURCE \
 	-march=native \
